@@ -134,10 +134,13 @@ async def part4_attacks():
 
 
 async def main(parts=None):
-    setup_api_key()
-
     if parts is None:
         parts = [2, 3, 4]  # Core: CP2 → CP3 → CP4
+
+    # Only the live model checkpoints need credentials. Local guardrail and
+    # pipeline work can run offline and still produce reproducible evidence.
+    if 4 in parts:
+        setup_api_key()
 
     for part in parts:
         if part == 2:

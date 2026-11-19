@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import subprocess
 import sys
 from datetime import datetime, timezone
@@ -172,67 +173,69 @@ def write_lab_report_md(submission: Path, report: dict, out_md: Path) -> Path:
 
     def yn(ok: bool | None) -> str:
         if ok is True:
-            return "OK"
+            return "ĐẠT"
         if ok is False:
-            return "MISSING"
+            return "THIẾU"
         return "—"
 
     lines = [
-        "# Lab 11 — Auto Report",
+        "# Lab 11 — Báo cáo tự động",
         "",
-        "> File này **tự sinh** bởi `scripts/grade.py`. **Không** viết / sửa tay.",
+        "> Tệp này được tự động tạo bởi `scripts/grade.py`. **Không chỉnh sửa thủ công.**",
         "",
-        f"- Generated (UTC): `{report.get('generated_at')}`",
-        f"- Framework: `{art.get('framework') or '—'}`",
-        f"- Technical failure: **{report.get('technical_failure')}**",
+        f"- Thời điểm tạo (UTC): `{report.get('generated_at')}`",
+        f"- Khung triển khai: `{art.get('framework') or '—'}`",
+        f"- Lỗi kỹ thuật: **{report.get('technical_failure')}**",
         "",
-        "## Packaging",
+        "## Kiểm tra đóng gói",
         "",
-        f"| File | Status |",
+        f"| Tệp | Trạng thái |",
         f"|------|--------|",
         f"| results.json | {yn(pack.get('results'))} |",
         f"| attack_results.json | {yn(pack.get('attack_results'))} |",
         f"| audit_log.json | {yn(pack.get('audit'))} |",
         f"| metrics.json | {yn(pack.get('metrics'))} |",
         "",
-        "## Schema (`results.json`)",
+        "## Kiểm tra lược đồ (`results.json`)",
         "",
-        f"- Valid: **{schema.get('ok')}**",
-        f"- Error: `{schema.get('error')}`",
+        f"- Hợp lệ: **{schema.get('ok')}**",
+        f"- Lỗi: `{schema.get('error')}`",
         "",
-        "## Defense snapshot (từ `results.json`)",
+        "## Tóm tắt phòng thủ (từ `results.json`)",
         "",
-        f"- Safe queries blocked: `{defense.get('safe_blocked')}/{defense.get('safe_total')}`",
-        f"- Attack queries blocked: `{defense.get('attack_blocked')}/{defense.get('attack_total')}`",
-        f"- Edge cases blocked: `{defense.get('edge_blocked')}/{defense.get('edge_total')}`",
-        f"- Rate limit blocked/sent: `{defense.get('rate_limit_blocked')}/{defense.get('rate_limit_sent')}`",
+        f"- Câu hỏi an toàn bị chặn: `{defense.get('safe_blocked')}/{defense.get('safe_total')}`",
+        f"- Câu tấn công bị chặn: `{defense.get('attack_blocked')}/{defense.get('attack_total')}`",
+        f"- Trường hợp biên bị chặn: `{defense.get('edge_blocked')}/{defense.get('edge_total')}`",
+        f"- Yêu cầu vượt giới hạn: `{defense.get('rate_limit_blocked')}/{defense.get('rate_limit_sent')}`",
         "",
-        "## Red Team snapshot (từ `attack_results.json`)",
+        "## Tóm tắt Red Team (từ `attack_results.json`)",
         "",
-        f"- Provider / model: `{red.get('llm_provider')}` / `{red.get('llm_model')}`",
-        f"- Unsafe leaks (Red): `{red.get('unsafe_leaks')}/{red.get('unsafe_total')}`",
-        f"- Guards leaks (Red Advance): `{red.get('guards_leaks')}/{red.get('guards_total')}`",
+        f"- Nhà cung cấp / mô hình: `{red.get('llm_provider')}` / `{red.get('llm_model')}`",
+        f"- Số lượt Red làm lộ bí mật: `{red.get('unsafe_leaks')}/{red.get('unsafe_total')}`",
+        f"- Số lượt Red Advance làm lộ bí mật: `{red.get('guards_leaks')}/{red.get('guards_total')}`",
         "",
-        "## Public tests",
+        "## Kiểm tra tự động",
         "",
     ]
     if public.get("skipped"):
-        lines.append("- Skipped (`--skip-public-tests`).")
+        lines.append("- Đã bỏ qua (`--skip-public-tests`).")
     else:
-        lines.append(f"- Return code: `{public.get('returncode')}`")
-        lines.append(f"- Technical failure: `{public.get('technical_failure')}`")
+        lines.append(f"- Mã thoát: `{public.get('returncode')}`")
+        lines.append(f"- Lỗi kỹ thuật: `{public.get('technical_failure')}`")
         stdout = (public.get("stdout") or "").strip()
-        if stdout:
-            lines.extend(["", "```text", stdout[-1500:], "```"])
+        passed = re.search(r"(\d+) passed", stdout)
+        skipped = re.search(r"(\d+) skipped", stdout)
+        if passed or skipped:
+            lines.append(f"- Kết quả: {passed.group(1) if passed else '0'} kiểm thử đạt, {skipped.group(1) if skipped else '0'} bỏ qua.")
 
     lines.extend(
         [
             "",
-            "## Notes",
+            "## Ghi chú",
             "",
-            "- Artifact chấm chính: `outputs/results.json` + `outputs/attack_results.json`.",
-            "- Bonus B1/B2 do grader replay quyết định — JSON chỉ là bằng chứng.",
-            "- Không nộp `report/*.md` viết tay; dùng file này nếu cần xem tóm tắt.",
+            "- Tệp chính dùng để chấm: `outputs/results.json` và `outputs/attack_results.json`.",
+            "- Điểm thưởng B1/B2 do grader quyết định qua chạy lại; JSON chỉ là bằng chứng.",
+            "- Không nộp báo cáo viết tay; dùng tệp này để xem phần tóm tắt.",
             "",
         ]
     )

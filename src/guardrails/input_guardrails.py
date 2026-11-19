@@ -11,6 +11,7 @@ Status convention (không dùng True/False mơ hồ):
 from __future__ import annotations
 
 import re
+import unicodedata
 from typing import Literal
 
 from google.genai import types
@@ -51,14 +52,18 @@ def detect_injection(user_input: str) -> InputStatus:
     Returns:
         ``"BLOCK"`` if injection detected (chặn), ``"ALLOW"`` otherwise (cho qua).
     """
+    normalized = unicodedata.normalize("NFKC", user_input or "").translate(str.maketrans("", "", "\u200b\u200c\u200d\ufeff\u2060"))
     INJECTION_PATTERNS = [
-        # TODO: Add at least 5 regex patterns
-        # Example:
-        # r"ignore (all )?(previous|above) instructions",
+        r"\bignore\s+(?:all\s+)?(?:previous|above|prior)\s+instructions?\b",
+        r"\byou\s+are\s+now\b", r"\bsystem\s+prompt\b|\bdeveloper\s+instructions?\b",
+        r"\breveal\s+(?:your\s+)?(?:instructions?|prompt|secrets?)\b",
+        r"\bpretend\s+(?:that\s+)?you\s+are\b", r"\bact\s+as\s+(?:an?\s+)?unrestricted\b",
+        r"\bdisregard\s+(?:all\s+)?(?:rules|instructions|safety)\b",
+        r"\b(?:print|show|repeat)\s+(?:the\s+)?(?:hidden\s+)?system\s+prompt\b",
     ]
 
     for pattern in INJECTION_PATTERNS:
-        if re.search(pattern, user_input, re.IGNORECASE):
+        if re.search(pattern, normalized, re.IGNORECASE):
             return "BLOCK"
     return "ALLOW"
 
@@ -84,14 +89,14 @@ def topic_filter(user_input: str) -> InputStatus:
         ``"BLOCK"`` = chặn (off-topic hoặc topic cấm).
         ``"ALLOW"`` = cho qua (câu banking hợp lệ).
     """
-    input_lower = user_input.lower()
-
-    # TODO: Implement logic:
-    # 1. If input contains any blocked topic -> return "BLOCK"
-    # 2. If input doesn't contain any allowed topic -> return "BLOCK"
-    # 3. Otherwise -> return "ALLOW"
-
-    pass  # Replace with your implementation
+    input_lower = unicodedata.normalize("NFKC", user_input or "").casefold()
+    if any(re.search(r"\b" + re.escape(term.casefold()) + r"\b", input_lower) for term in BLOCKED_TOPICS):
+        return "BLOCK"
+    if any(re.search(r"\b" + re.escape(term.casefold()) + r"\b", input_lower) for term in ALLOWED_TOPICS):
+        return "ALLOW"
+    if re.search(r"\b(tài khoản|chuyển tiền|chuyen tien|giao dịch|giao dich|tiết kiệm|ngân hàng|ngan hang|số dư|lãi suất|thẻ tín dụng|vay vốn)\b", input_lower):
+        return "ALLOW"
+    return "BLOCK"
 
 
 # ============================================================
@@ -144,14 +149,13 @@ class InputGuardrailPlugin(base_plugin.BasePlugin):
         self.total_count += 1
         text = self._extract_text(user_message)
 
-        # TODO: Implement logic:
-        # 1. Call detect_injection(text)
-        #    - If "BLOCK": increment blocked_count, return self._block_response("...")
-        # 2. Call topic_filter(text)
-        #    - If "BLOCK": increment blocked_count, return self._block_response("...")
-        # 3. If both return "ALLOW": return None (let message through)
-
-        pass  # Replace with your implementation
+        if detect_injection(text) == "BLOCK":
+            self.blocked_count += 1
+            return self._block_response("Request blocked by the input security policy.")
+        if topic_filter(text) == "BLOCK":
+            self.blocked_count += 1
+            return self._block_response("Please ask a question related to VinBank services.")
+        return None
 
 
 # ============================================================
